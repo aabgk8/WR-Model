@@ -1,0 +1,82 @@
+---
+  What You Already Have
+
+  ┌─────────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────────────┐
+  │            Component            │                                          Files                                           │
+  ├─────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────┤
+  │ College stats (PFF)             │ receiving_summary14-24.csv — ~45 metrics per player per season                           │
+  ├─────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────┤
+  │ NFL fantasy production (target) │ FantasyPros_Fantasy_Football_Statistics_WR/TE 2015-2024.csv                              │
+  ├─────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Physical measurables            │ my_players_with_hw.csv (HEIGHT, WEIGHT, SPEED, ROUND, SELECTION)                         │
+  ├─────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Data pipeline                   │ transform_rec_sum.py → transform_final_season.py → concat_and_add_fpts.py → get_ht_wt.py │
+  ├─────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Working model                   │ RF2.py — Random Forest with top-40 feature selection, ~5,500 training rows, 76 columns   │
+  ├─────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Target variable                 │ career_fpts_per_game (NFL PPR fantasy points per game)                                   │
+  └─────────────────────────────────┴──────────────────────────────────────────────────────────────────────────────────────────┘
+
+  You've got a solid foundation. Your pipeline aggregates multi-season college data into career-level features (career_avg, career_max, career_sum) and joins
+   it with NFL fantasy output. The Random Forest in RF2.py already does feature selection and holdout prediction for the 2024 class.
+
+  ---
+  Key Problems to Address
+
+  1. Target variable is very skewed. Most college WRs get 0 NFL fantasy points (undrafted, practice squad, cut). This makes regression hard — the model will
+  learn "predict ~0 for everyone" and still get decent R².
+
+  2. Random 80/20 split leaks information. Players from the same draft class share era-level signal (rule changes, scheme trends). You should validate by
+  leaving out entire draft classes, not random rows.
+
+  3. Draft capital (ROUND, SELECTION) is leakage if your goal is pre-draft prediction. If you want to identify sleepers before the draft, you can't use where
+   they were drafted as a feature. If you're trying to predict post-draft, it's fine.
+
+  4. Random Forest is a reasonable start, but gradient boosting (XGBoost/LightGBM) consistently wins on tabular data with this kind of feature set.
+
+  ---
+  Recommended Approach
+
+  Here's how I'd structure the project:
+
+  Step 1: Clean up the target variable
+
+  Instead of raw career_fpts_per_game across an entire career, consider:
+  - Best single-season fpts/game in first 3 NFL years — less noise from injuries/team changes later in career
+  - Binary classification: "Did this player ever finish as a top-36 fantasy WR in a season?" (hit/bust)
+  - Or keep regression but filter out players with < 1 NFL game so you're only predicting among players who actually got a chance
+
+  Step 2: Leave-one-class-out cross-validation
+
+  Train on draft classes 2015-2022, predict 2023. Then train on 2015-2023, predict 2024. This gives you honest out-of-sample error.
+
+  Step 3: Gradient Boosted Trees (XGBoost or LightGBM)
+
+  These handle missing values natively, are less sensitive to feature scaling, and typically outperform RF on structured data. Use early stopping on the
+  validation fold to avoid overfitting.
+
+  Step 4: Feature engineering improvements
+
+  - Per-game rates (yards per route run is already there — great feature)
+  - Breakout age / dominance share — what % of team targets did they command?
+  - Year-over-year improvement (trend from freshman to final year)
+  - Conference tier — SEC/Big Ten WR stats mean more than FCS stats
+
+  Step 5: Proper evaluation
+
+  - Ranking correlation (Spearman) — do the predicted rankings match actual rankings?
+  - Precision at top-K — of the top 10 predicted WRs, how many actually hit?
+  - MAE alongside R² — how many fpts/game off are you on average?
+
+  ---
+  Want me to build it?
+
+  I can write a clean, end-to-end Python project that:
+  1. Loads your existing processed data (wr_te_final_with_fantasy.csv or my_players_with_hw.csv)
+  2. Implements leave-one-class-out CV
+  3. Trains XGBoost + Random Forest (compare both)
+  4. Evaluates with proper metrics (Spearman rank correlation, precision@K, MAE)
+  5. Generates 2025 draft class predictions from the 2024 college holdout data
+
+  Just let me know which direction you want to go — regression on fpts/game, binary hit/bust classification, or both — and whether draft capital (round/pick)
+   should be a feature or not.
