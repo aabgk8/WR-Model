@@ -24,6 +24,12 @@
 - `my_players_with_measurables.csv` is the current measurable / draft-capital source of truth.
 - `receiving_summary25.csv` should live alongside the other `receiving_summaryYY.csv` files here so the raw input set stays in one place.
 
+## Current model results
+
+- See `MODEL_RESULTS_SUMMARY.md` for the latest snapshot of the three main binary WR model variants, their targets, output files, metrics, and top 15 projected WRs.
+- Current preferred overall model: `RF2_binary_600yd_first2yrs.py`
+- Current preferred ceiling-hit model: `RF2_binary_top40_recent_hits.py`
+
 ## Position scope
 
 - The raw `receiving_summaryYY.csv` files may contain more than WRs.
