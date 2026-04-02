@@ -11,6 +11,18 @@ wr_data/wr_data/*.joblib
 wr_data/wr_data/wr_holdout_*predictions*.csv
 wr_data/wr_data/wr_binary_*_backtest.csv
 wr_data/wr_data/wr_binary_*_feature_importance.csv
+
+# Keep the main published result CSVs for the three primary model variants
+!wr_data/wr_data/wr_holdout_2025_binary_top40_within3yrs_predictions.csv
+!wr_data/wr_data/wr_holdout_2025_binary_top40_within3yrs_recent_hits_predictions.csv
+!wr_data/wr_data/wr_holdout_2025_binary_600yd_first2yrs_predictions.csv
+!wr_data/wr_data/wr_binary_top40_within3yrs_backtest.csv
+!wr_data/wr_data/wr_binary_top40_within3yrs_recent_hits_backtest.csv
+!wr_data/wr_data/wr_binary_600yd_first2yrs_backtest.csv
+!wr_data/wr_data/wr_binary_top40_within3yrs_feature_importance.csv
+!wr_data/wr_data/wr_binary_top40_within3yrs_recent_hits_feature_importance.csv
+!wr_data/wr_data/wr_binary_600yd_first2yrs_feature_importance.csv
+
 wr_data/wr_data/*match_report.csv
 wr_data/wr_data/*unmatched*.csv
 wr_data/wr_data/*unused_source_rows.csv
