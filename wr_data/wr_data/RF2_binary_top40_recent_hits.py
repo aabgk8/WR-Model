@@ -130,6 +130,8 @@ def main():
 
     train_df, latest_fantasy_year = add_recent_hit_inclusive_target(train_df, fantasy_df)
     holdout_df, _ = add_recent_hit_inclusive_target(holdout_df, fantasy_df)
+    train_df = base.add_draft_capital_features(train_df)
+    holdout_df = base.add_draft_capital_features(holdout_df)
 
     trainable_df = train_df[
         (train_df["final_position"] == "WR")
@@ -168,10 +170,18 @@ def main():
     split_model = base.build_classifier()
     split_model.fit(X_train_split, train_split_df[TARGET_COL].values)
     split_val_prob = split_model.predict_proba(X_val_split)[:, 1]
+    split_prior_state = base.fit_draft_prior(train_split_df, TARGET_COL)
+    split_val_draft_prior = base.score_draft_prior(val_split_df, split_prior_state)
+    split_val_blended_prob = base.blend_model_with_draft_prior(split_val_prob, split_val_draft_prior)
     base.print_metrics(
-        "Random split validation (recent-hit-inclusive)",
+        "Random split validation (recent-hit-inclusive, model only)",
         val_split_df[TARGET_COL].values,
         split_val_prob,
+    )
+    base.print_metrics(
+        f"Random split validation (recent-hit-inclusive, draft-blended, weight={base.DRAFT_PRIOR_BLEND_WEIGHT:.2f})",
+        val_split_df[TARGET_COL].values,
+        split_val_blended_prob,
     )
 
     latest_complete_draft_year = latest_fantasy_year - base.TARGET_WINDOW_YEARS + 1
@@ -189,10 +199,18 @@ def main():
         backtest_model = base.build_classifier()
         backtest_model.fit(X_backtest_train, earlier_df[TARGET_COL].values)
         backtest_prob = backtest_model.predict_proba(X_backtest_holdout)[:, 1]
+        backtest_prior_state = base.fit_draft_prior(earlier_df, TARGET_COL)
+        backtest_draft_prior = base.score_draft_prior(backtest_df, backtest_prior_state)
+        backtest_blended_prob = base.blend_model_with_draft_prior(backtest_prob, backtest_draft_prior)
         base.print_metrics(
-            f"Draft-year backtest ({latest_complete_draft_year})",
+            f"Draft-year backtest ({latest_complete_draft_year}, model only)",
             backtest_df[TARGET_COL].values,
             backtest_prob,
+        )
+        base.print_metrics(
+            f"Draft-year backtest ({latest_complete_draft_year}, draft-blended)",
+            backtest_df[TARGET_COL].values,
+            backtest_blended_prob,
         )
 
         backtest_output = backtest_df[
@@ -204,6 +222,9 @@ def main():
                 "SELECTION",
                 "HEIGHT",
                 "WEIGHT",
+                "draft_pick_bucket_ordinal",
+                "is_round1_pick",
+                "is_top10_pick",
                 TARGET_COL,
                 "best_ppg_rank_within_window",
                 "first_top40_ppg_year",
@@ -215,7 +236,10 @@ def main():
                 "final_season_with_dominant_teammate",
             ]
         ].copy()
-        backtest_output["prob_top40_ppg_within_3yrs"] = backtest_prob
+        backtest_output["model_prob_top40_ppg_within_3yrs"] = backtest_prob
+        backtest_output["draft_prior_prob"] = backtest_draft_prior
+        backtest_output["prob_top40_ppg_within_3yrs"] = backtest_blended_prob
+        backtest_output["draft_blend_weight"] = base.DRAFT_PRIOR_BLEND_WEIGHT
         backtest_output["predicted_top40_ppg_within_3yrs"] = (
             backtest_output["prob_top40_ppg_within_3yrs"] >= base.PREDICTION_THRESHOLD
         ).astype(int)
@@ -226,11 +250,13 @@ def main():
     X_full, final_imputer = base.prepare_feature_matrix(trainable_df, feature_cols, fit_imputer=True)
     final_model = base.build_classifier()
     final_model.fit(X_full, trainable_df[TARGET_COL].values)
+    final_prior_state = base.fit_draft_prior(trainable_df, TARGET_COL)
     save_feature_importances(final_model, feature_cols)
 
     model_artifact = {
         "model": final_model,
         "imputer": final_imputer,
+        "draft_prior_state": final_prior_state,
         "feature_names": feature_cols,
         "config": {
             "target_variant": "recent_hit_inclusive",
@@ -238,6 +264,7 @@ def main():
             "target_window_years": base.TARGET_WINDOW_YEARS,
             "min_games_for_ppg_rank": base.MIN_GAMES_FOR_PPG_RANK,
             "prediction_threshold": base.PREDICTION_THRESHOLD,
+            "draft_prior_blend_weight": base.DRAFT_PRIOR_BLEND_WEIGHT,
             "holdout_year": base.HOLDOUT_YEAR,
             "latest_fantasy_year": latest_fantasy_year,
         },
@@ -254,6 +281,8 @@ def main():
         prospective_df, feature_cols, imputer=final_imputer, fit_imputer=False
     )
     prospective_prob = final_model.predict_proba(X_holdout)[:, 1]
+    prospective_draft_prior = base.score_draft_prior(prospective_df, final_prior_state)
+    prospective_blended_prob = base.blend_model_with_draft_prior(prospective_prob, prospective_draft_prior)
 
     prospective_output = prospective_df[
         [
@@ -263,6 +292,9 @@ def main():
             "SELECTION",
             "HEIGHT",
             "WEIGHT",
+            "draft_pick_bucket_ordinal",
+            "is_round1_pick",
+            "is_top10_pick",
             "draft_year",
             "college_seasons_played",
             "first_breakout_season_index",
@@ -277,7 +309,10 @@ def main():
             "final_season_with_dominant_teammate",
         ]
     ].copy()
-    prospective_output["prob_top40_ppg_within_3yrs"] = prospective_prob
+    prospective_output["model_prob_top40_ppg_within_3yrs"] = prospective_prob
+    prospective_output["draft_prior_prob"] = prospective_draft_prior
+    prospective_output["prob_top40_ppg_within_3yrs"] = prospective_blended_prob
+    prospective_output["draft_blend_weight"] = base.DRAFT_PRIOR_BLEND_WEIGHT
     prospective_output["predicted_top40_ppg_within_3yrs"] = (
         prospective_output["prob_top40_ppg_within_3yrs"] >= base.PREDICTION_THRESHOLD
     ).astype(int)

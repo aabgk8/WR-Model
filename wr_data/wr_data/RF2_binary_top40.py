@@ -29,6 +29,9 @@ DOMINANT_TEAMMATE_YARD_SHARE_THRESHOLD = 0.25
 STRONG_TEAMMATE_500_YARDS = 500
 STRONG_TEAMMATE_800_YARDS = 800
 HEIGHT_WEIGHT_FEATURES = {"HEIGHT", "WEIGHT"}
+DRAFT_PRIOR_BLEND_WEIGHT = 0.25
+DRAFT_PRIOR_SMOOTHING = 12.0
+DRAFT_PICK_BUCKET_BINS = [0, 10, 20, 32, 50, 75, 100, 150, np.inf]
 EXCLUDED_EXTRA_MEASURABLES = {
     "AGE_ON_DRAFT_DAY",
     "HAND_SIZE",
@@ -124,6 +127,12 @@ def numeric_value(value):
         return float(value)
     except (TypeError, ValueError):
         return np.nan
+
+
+def safe_ratio(numerator, denominator):
+    if pd.isna(numerator) or pd.isna(denominator) or denominator <= 0:
+        return np.nan
+    return float(numerator) / float(denominator)
 
 
 def first_matching_season_index(season_rows, predicate):
@@ -299,6 +308,34 @@ def summarize_teammate_group(group):
     group["teammate_500yd_count"] = teammate_500yd_count
     group["teammate_800yd_count"] = teammate_800yd_count
     group["teammate_20pct_target_share_count"] = teammate_20pct_target_share_count
+    group["target_share_gap_vs_top_teammate"] = (
+        group["team_target_share"] - group["top_teammate_target_share"]
+    )
+    group["yard_share_gap_vs_top_teammate"] = (
+        group["team_yard_share"] - group["top_teammate_yard_share"]
+    )
+    group["target_share_to_top_teammate_ratio"] = group.apply(
+        lambda row: safe_ratio(row["team_target_share"], row["top_teammate_target_share"]),
+        axis=1,
+    )
+    group["yard_share_to_top_teammate_ratio"] = group.apply(
+        lambda row: safe_ratio(row["team_yard_share"], row["top_teammate_yard_share"]),
+        axis=1,
+    )
+    group["top2_target_share"] = (
+        group["team_target_share"] + group["top_teammate_target_share"]
+    )
+    group["top2_yard_share"] = (
+        group["team_yard_share"] + group["top_teammate_yard_share"]
+    )
+    group["share_of_top2_targets"] = group.apply(
+        lambda row: safe_ratio(row["team_target_share"], row["top2_target_share"]),
+        axis=1,
+    )
+    group["share_of_top2_yards"] = group.apply(
+        lambda row: safe_ratio(row["team_yard_share"], row["top2_yard_share"]),
+        axis=1,
+    )
     group["dominant_teammate_flag"] = (
         (group["top_teammate_target_share"] >= DOMINANT_TEAMMATE_TARGET_SHARE_THRESHOLD)
         | (group["top_teammate_yard_share"] >= DOMINANT_TEAMMATE_YARD_SHARE_THRESHOLD)
@@ -339,10 +376,26 @@ def build_teammate_context_features(long_df):
             "career_max_team_target_share": group["team_target_share"].max(),
             "career_avg_team_yard_share": group["team_yard_share"].mean(),
             "career_max_team_yard_share": group["team_yard_share"].max(),
+            "career_avg_target_share_gap_vs_top_teammate": group["target_share_gap_vs_top_teammate"].mean(),
+            "career_max_target_share_gap_vs_top_teammate": group["target_share_gap_vs_top_teammate"].max(),
+            "career_avg_yard_share_gap_vs_top_teammate": group["yard_share_gap_vs_top_teammate"].mean(),
+            "career_max_yard_share_gap_vs_top_teammate": group["yard_share_gap_vs_top_teammate"].max(),
+            "career_avg_target_share_to_top_teammate_ratio": group["target_share_to_top_teammate_ratio"].mean(),
+            "career_max_target_share_to_top_teammate_ratio": group["target_share_to_top_teammate_ratio"].max(),
+            "career_avg_yard_share_to_top_teammate_ratio": group["yard_share_to_top_teammate_ratio"].mean(),
+            "career_max_yard_share_to_top_teammate_ratio": group["yard_share_to_top_teammate_ratio"].max(),
             "career_avg_top_teammate_target_share": group["top_teammate_target_share"].mean(),
             "career_max_top_teammate_target_share": group["top_teammate_target_share"].max(),
             "career_avg_top_teammate_yard_share": group["top_teammate_yard_share"].mean(),
             "career_max_top_teammate_yard_share": group["top_teammate_yard_share"].max(),
+            "career_avg_top2_target_share": group["top2_target_share"].mean(),
+            "career_max_top2_target_share": group["top2_target_share"].max(),
+            "career_avg_top2_yard_share": group["top2_yard_share"].mean(),
+            "career_max_top2_yard_share": group["top2_yard_share"].max(),
+            "career_avg_share_of_top2_targets": group["share_of_top2_targets"].mean(),
+            "career_max_share_of_top2_targets": group["share_of_top2_targets"].max(),
+            "career_avg_share_of_top2_yards": group["share_of_top2_yards"].mean(),
+            "career_max_share_of_top2_yards": group["share_of_top2_yards"].max(),
             "career_max_teammate_500yd_count": group["teammate_500yd_count"].max(),
             "career_max_teammate_800yd_count": group["teammate_800yd_count"].max(),
             "career_max_teammate_20pct_target_share_count": group["teammate_20pct_target_share_count"].max(),
@@ -351,8 +404,16 @@ def build_teammate_context_features(long_df):
             "career_seasons_with_dominant_teammate": group["dominant_teammate_flag"].sum(),
             "final_team_target_share": final_row["team_target_share"],
             "final_team_yard_share": final_row["team_yard_share"],
+            "final_target_share_gap_vs_top_teammate": final_row["target_share_gap_vs_top_teammate"],
+            "final_yard_share_gap_vs_top_teammate": final_row["yard_share_gap_vs_top_teammate"],
+            "final_target_share_to_top_teammate_ratio": final_row["target_share_to_top_teammate_ratio"],
+            "final_yard_share_to_top_teammate_ratio": final_row["yard_share_to_top_teammate_ratio"],
             "final_top_teammate_target_share": final_row["top_teammate_target_share"],
             "final_top_teammate_yard_share": final_row["top_teammate_yard_share"],
+            "final_top2_target_share": final_row["top2_target_share"],
+            "final_top2_yard_share": final_row["top2_yard_share"],
+            "final_share_of_top2_targets": final_row["share_of_top2_targets"],
+            "final_share_of_top2_yards": final_row["share_of_top2_yards"],
             "final_teammate_500yd_count": final_row["teammate_500yd_count"],
             "final_teammate_800yd_count": final_row["teammate_800yd_count"],
             "final_teammate_20pct_target_share_count": final_row["teammate_20pct_target_share_count"],
@@ -370,6 +431,14 @@ def build_teammate_context_features(long_df):
                     "career_max_team_yard_share_with_dominant_teammate": np.nan,
                     "career_avg_top_teammate_target_share_when_dominant": np.nan,
                     "career_avg_top_teammate_yard_share_when_dominant": np.nan,
+                    "career_avg_target_share_to_top_teammate_ratio_when_dominant": np.nan,
+                    "career_max_target_share_to_top_teammate_ratio_when_dominant": np.nan,
+                    "career_avg_yard_share_to_top_teammate_ratio_when_dominant": np.nan,
+                    "career_max_yard_share_to_top_teammate_ratio_when_dominant": np.nan,
+                    "career_avg_target_share_gap_vs_top_teammate_when_dominant": np.nan,
+                    "career_max_target_share_gap_vs_top_teammate_when_dominant": np.nan,
+                    "career_avg_share_of_top2_targets_when_dominant": np.nan,
+                    "career_max_share_of_top2_targets_when_dominant": np.nan,
                 }
             )
         else:
@@ -381,6 +450,14 @@ def build_teammate_context_features(long_df):
                     "career_max_team_yard_share_with_dominant_teammate": dominant_group["team_yard_share"].max(),
                     "career_avg_top_teammate_target_share_when_dominant": dominant_group["top_teammate_target_share"].mean(),
                     "career_avg_top_teammate_yard_share_when_dominant": dominant_group["top_teammate_yard_share"].mean(),
+                    "career_avg_target_share_to_top_teammate_ratio_when_dominant": dominant_group["target_share_to_top_teammate_ratio"].mean(),
+                    "career_max_target_share_to_top_teammate_ratio_when_dominant": dominant_group["target_share_to_top_teammate_ratio"].max(),
+                    "career_avg_yard_share_to_top_teammate_ratio_when_dominant": dominant_group["yard_share_to_top_teammate_ratio"].mean(),
+                    "career_max_yard_share_to_top_teammate_ratio_when_dominant": dominant_group["yard_share_to_top_teammate_ratio"].max(),
+                    "career_avg_target_share_gap_vs_top_teammate_when_dominant": dominant_group["target_share_gap_vs_top_teammate"].mean(),
+                    "career_max_target_share_gap_vs_top_teammate_when_dominant": dominant_group["target_share_gap_vs_top_teammate"].max(),
+                    "career_avg_share_of_top2_targets_when_dominant": dominant_group["share_of_top2_targets"].mean(),
+                    "career_max_share_of_top2_targets_when_dominant": dominant_group["share_of_top2_targets"].max(),
                 }
             )
 
@@ -454,6 +531,40 @@ def add_draft_year(df):
 
     fallback_mask = df["draft_year"].isna() & df["final_season"].notna() & df["ROUND"].notna()
     df.loc[fallback_mask, "draft_year"] = df.loc[fallback_mask, "final_season"] + 1
+    return df
+
+
+def add_draft_capital_features(df):
+    df = df.copy()
+    df["OVERALL_PICK"] = pd.to_numeric(df.get("OVERALL_PICK"), errors="coerce")
+    df["ROUND"] = pd.to_numeric(df.get("ROUND"), errors="coerce")
+
+    pick = df["OVERALL_PICK"]
+    valid_pick = pick > 0
+
+    df["draft_pick_inverse"] = np.where(valid_pick, 1.0 / pick, np.nan)
+    df["draft_pick_sqrt_inverse"] = np.where(valid_pick, 1.0 / np.sqrt(pick), np.nan)
+    df["draft_pick_log"] = np.where(valid_pick, np.log1p(pick), np.nan)
+    df["draft_pick_bucket_ordinal"] = pd.cut(
+        pick,
+        bins=DRAFT_PICK_BUCKET_BINS,
+        labels=False,
+        include_lowest=True,
+    )
+    if "draft_pick_bucket_ordinal" in df.columns:
+        df["draft_pick_bucket_ordinal"] = pd.to_numeric(df["draft_pick_bucket_ordinal"], errors="coerce")
+
+    round_series = df["ROUND"]
+    df["is_round1_pick"] = (round_series == 1).astype(int)
+    df["is_day2_pick"] = round_series.isin([2, 3]).astype(int)
+    df["is_top10_pick"] = valid_pick & (pick <= 10)
+    df["is_top20_pick"] = valid_pick & (pick <= 20)
+    df["is_top32_pick"] = valid_pick & (pick <= 32)
+    df["is_top100_pick"] = valid_pick & (pick <= 100)
+
+    for col in ["is_top10_pick", "is_top20_pick", "is_top32_pick", "is_top100_pick"]:
+        df[col] = df[col].astype(int)
+
     return df
 
 
@@ -538,6 +649,73 @@ def build_feature_list(df):
     }
     drop_cols.update(EXCLUDED_EXTRA_MEASURABLES)
     return [col for col in df.columns if col not in drop_cols]
+
+
+def fit_draft_prior(df, target_col):
+    prior_df = df[["OVERALL_PICK", target_col]].copy()
+    prior_df = prior_df.dropna(subset=["OVERALL_PICK", target_col])
+    if prior_df.empty:
+        return {
+            "global_rate": 0.0,
+            "bucket_rates": {},
+        }
+
+    global_rate = float(prior_df[target_col].mean())
+    bucket_codes = pd.cut(
+        prior_df["OVERALL_PICK"],
+        bins=DRAFT_PICK_BUCKET_BINS,
+        labels=False,
+        include_lowest=True,
+    )
+    prior_df["draft_pick_bucket_ordinal"] = pd.to_numeric(bucket_codes, errors="coerce")
+    grouped = prior_df.dropna(subset=["draft_pick_bucket_ordinal"]).groupby("draft_pick_bucket_ordinal")[target_col]
+
+    bucket_rates = {}
+    for bucket, series in grouped:
+        bucket = int(bucket)
+        count = int(series.count())
+        positives = float(series.sum())
+        smoothed_rate = (positives + DRAFT_PRIOR_SMOOTHING * global_rate) / (count + DRAFT_PRIOR_SMOOTHING)
+        bucket_rates[bucket] = float(smoothed_rate)
+
+    return {
+        "global_rate": global_rate,
+        "bucket_rates": bucket_rates,
+    }
+
+
+def select_top_features_by_importance(train_df, target_col, feature_cols, limit):
+    if limit is None or limit >= len(feature_cols):
+        return list(feature_cols)
+
+    X_train, _ = prepare_feature_matrix(train_df, feature_cols, fit_imputer=True)
+    model = build_classifier()
+    model.fit(X_train, train_df[target_col].values)
+
+    feat_imp = pd.DataFrame(
+        {"feature": feature_cols, "importance": model.feature_importances_}
+    ).sort_values(["importance", "feature"], ascending=[False, True])
+    return feat_imp.head(limit)["feature"].tolist()
+
+
+def score_draft_prior(df, prior_state):
+    bucket_codes = pd.cut(
+        pd.to_numeric(df["OVERALL_PICK"], errors="coerce"),
+        bins=DRAFT_PICK_BUCKET_BINS,
+        labels=False,
+        include_lowest=True,
+    )
+    bucket_codes = pd.to_numeric(bucket_codes, errors="coerce")
+    global_rate = float(prior_state["global_rate"])
+    bucket_rates = prior_state["bucket_rates"]
+
+    return bucket_codes.map(lambda bucket: bucket_rates.get(int(bucket), global_rate) if pd.notna(bucket) else global_rate).astype(float).to_numpy()
+
+
+def blend_model_with_draft_prior(model_prob, draft_prior_prob, blend_weight=DRAFT_PRIOR_BLEND_WEIGHT):
+    model_prob = np.asarray(model_prob, dtype=float)
+    draft_prior_prob = np.asarray(draft_prior_prob, dtype=float)
+    return (1.0 - blend_weight) * model_prob + blend_weight * draft_prior_prob
 
 
 def prepare_feature_matrix(df, feature_cols, imputer=None, fit_imputer=False):
@@ -635,6 +813,8 @@ def main():
 
     train_df, latest_fantasy_year = add_binary_target(train_df, fantasy_df)
     holdout_df, _ = add_binary_target(holdout_df, fantasy_df)
+    train_df = add_draft_capital_features(train_df)
+    holdout_df = add_draft_capital_features(holdout_df)
 
     complete_train_df = train_df[
         (train_df["final_position"] == "WR")
@@ -670,10 +850,18 @@ def main():
     split_model = build_classifier()
     split_model.fit(X_train_split, train_split_df["target_top40_ppg_within_3yrs"].values)
     split_val_prob = split_model.predict_proba(X_val_split)[:, 1]
+    split_prior_state = fit_draft_prior(train_split_df, "target_top40_ppg_within_3yrs")
+    split_val_draft_prior = score_draft_prior(val_split_df, split_prior_state)
+    split_val_blended_prob = blend_model_with_draft_prior(split_val_prob, split_val_draft_prior)
     print_metrics(
-        "Random split validation",
+        "Random split validation (model only)",
         val_split_df["target_top40_ppg_within_3yrs"].values,
         split_val_prob,
+    )
+    print_metrics(
+        f"Random split validation (draft-blended, weight={DRAFT_PRIOR_BLEND_WEIGHT:.2f})",
+        val_split_df["target_top40_ppg_within_3yrs"].values,
+        split_val_blended_prob,
     )
 
     latest_complete_draft_year = latest_fantasy_year - TARGET_WINDOW_YEARS + 1
@@ -691,10 +879,18 @@ def main():
         backtest_model = build_classifier()
         backtest_model.fit(X_backtest_train, earlier_df["target_top40_ppg_within_3yrs"].values)
         backtest_prob = backtest_model.predict_proba(X_backtest_holdout)[:, 1]
+        backtest_prior_state = fit_draft_prior(earlier_df, "target_top40_ppg_within_3yrs")
+        backtest_draft_prior = score_draft_prior(backtest_df, backtest_prior_state)
+        backtest_blended_prob = blend_model_with_draft_prior(backtest_prob, backtest_draft_prior)
         print_metrics(
-            f"Draft-year backtest ({latest_complete_draft_year})",
+            f"Draft-year backtest ({latest_complete_draft_year}, model only)",
             backtest_df["target_top40_ppg_within_3yrs"].values,
             backtest_prob,
+        )
+        print_metrics(
+            f"Draft-year backtest ({latest_complete_draft_year}, draft-blended)",
+            backtest_df["target_top40_ppg_within_3yrs"].values,
+            backtest_blended_prob,
         )
 
         backtest_output = backtest_df[
@@ -706,6 +902,9 @@ def main():
                 "SELECTION",
                 "HEIGHT",
                 "WEIGHT",
+                "draft_pick_bucket_ordinal",
+                "is_round1_pick",
+                "is_top10_pick",
                 "target_top40_ppg_within_3yrs",
                 "best_ppg_rank_within_window",
                 "first_top40_ppg_year",
@@ -717,7 +916,10 @@ def main():
                 "final_season_with_dominant_teammate",
             ]
         ].copy()
-        backtest_output["prob_top40_ppg_within_3yrs"] = backtest_prob
+        backtest_output["model_prob_top40_ppg_within_3yrs"] = backtest_prob
+        backtest_output["draft_prior_prob"] = backtest_draft_prior
+        backtest_output["prob_top40_ppg_within_3yrs"] = backtest_blended_prob
+        backtest_output["draft_blend_weight"] = DRAFT_PRIOR_BLEND_WEIGHT
         backtest_output["predicted_top40_ppg_within_3yrs"] = (
             backtest_output["prob_top40_ppg_within_3yrs"] >= PREDICTION_THRESHOLD
         ).astype(int)
@@ -728,17 +930,20 @@ def main():
     X_full, final_imputer = prepare_feature_matrix(complete_train_df, feature_cols, fit_imputer=True)
     final_model = build_classifier()
     final_model.fit(X_full, complete_train_df["target_top40_ppg_within_3yrs"].values)
+    final_prior_state = fit_draft_prior(complete_train_df, "target_top40_ppg_within_3yrs")
     save_feature_importances(final_model, feature_cols)
 
     model_artifact = {
         "model": final_model,
         "imputer": final_imputer,
+        "draft_prior_state": final_prior_state,
         "feature_names": feature_cols,
         "config": {
             "target_top_n": TARGET_TOP_N,
             "target_window_years": TARGET_WINDOW_YEARS,
             "min_games_for_ppg_rank": MIN_GAMES_FOR_PPG_RANK,
             "prediction_threshold": PREDICTION_THRESHOLD,
+            "draft_prior_blend_weight": DRAFT_PRIOR_BLEND_WEIGHT,
             "holdout_year": HOLDOUT_YEAR,
             "latest_fantasy_year": latest_fantasy_year,
         },
@@ -755,6 +960,8 @@ def main():
         prospective_df, feature_cols, imputer=final_imputer, fit_imputer=False
     )
     prospective_prob = final_model.predict_proba(X_holdout)[:, 1]
+    prospective_draft_prior = score_draft_prior(prospective_df, final_prior_state)
+    prospective_blended_prob = blend_model_with_draft_prior(prospective_prob, prospective_draft_prior)
 
     prospective_output = prospective_df[
         [
@@ -764,6 +971,9 @@ def main():
             "SELECTION",
             "HEIGHT",
             "WEIGHT",
+            "draft_pick_bucket_ordinal",
+            "is_round1_pick",
+            "is_top10_pick",
             "draft_year",
             "college_seasons_played",
             "first_breakout_season_index",
@@ -778,7 +988,10 @@ def main():
             "final_season_with_dominant_teammate",
         ]
     ].copy()
-    prospective_output["prob_top40_ppg_within_3yrs"] = prospective_prob
+    prospective_output["model_prob_top40_ppg_within_3yrs"] = prospective_prob
+    prospective_output["draft_prior_prob"] = prospective_draft_prior
+    prospective_output["prob_top40_ppg_within_3yrs"] = prospective_blended_prob
+    prospective_output["draft_blend_weight"] = DRAFT_PRIOR_BLEND_WEIGHT
     prospective_output["predicted_top40_ppg_within_3yrs"] = (
         prospective_output["prob_top40_ppg_within_3yrs"] >= PREDICTION_THRESHOLD
     ).astype(int)
