@@ -3,29 +3,25 @@ __pycache__/
 
 # Local archives and scratch bundles
 archive/
-wr_data/wr_data/archive/
+wr_data/archive/
 wr_data.zip
 
 # Generated model outputs and artifacts
-wr_data/wr_data/*.joblib
-wr_data/wr_data/wr_holdout_*predictions*.csv
-wr_data/wr_data/wr_binary_*_backtest.csv
-wr_data/wr_data/wr_binary_*_feature_importance.csv
+wr_data/outputs/models/*.joblib
+wr_data/outputs/predictions/wr_holdout_*predictions*.csv
+wr_data/outputs/backtests/wr_binary_*_backtest.csv
+wr_data/outputs/feature_importance/wr_binary_*_feature_importance.csv
+wr_data/outputs/reports/*.csv
+wr_data/outputs/sweeps/*.csv
+wr_data/outputs/templates/*.csv
 
 # Keep the main published result CSVs for the three primary model variants
-!wr_data/wr_data/wr_holdout_2025_binary_top40_within3yrs_predictions.csv
-!wr_data/wr_data/wr_holdout_2025_binary_top40_within3yrs_recent_hits_predictions.csv
-!wr_data/wr_data/wr_holdout_2025_binary_600yd_first2yrs_predictions.csv
-!wr_data/wr_data/wr_binary_top40_within3yrs_backtest.csv
-!wr_data/wr_data/wr_binary_top40_within3yrs_recent_hits_backtest.csv
-!wr_data/wr_data/wr_binary_600yd_first2yrs_backtest.csv
-!wr_data/wr_data/wr_binary_top40_within3yrs_feature_importance.csv
-!wr_data/wr_data/wr_binary_top40_within3yrs_recent_hits_feature_importance.csv
-!wr_data/wr_data/wr_binary_600yd_first2yrs_feature_importance.csv
-
-wr_data/wr_data/*match_report.csv
-wr_data/wr_data/*unmatched*.csv
-wr_data/wr_data/*unused_source_rows.csv
-wr_data/wr_data/my_players_missing_*.csv
-wr_data/wr_data/my_players_measurables_remaining_collection.csv
-wr_data/wr_data/wr_binary_*_bio_collection_template.csv
+!wr_data/outputs/predictions/wr_holdout_2025_binary_top40_within3yrs_predictions.csv
+!wr_data/outputs/predictions/wr_holdout_2025_binary_top40_within3yrs_recent_hits_predictions.csv
+!wr_data/outputs/predictions/wr_holdout_2025_binary_600yd_first2yrs_predictions.csv
+!wr_data/outputs/backtests/wr_binary_top40_within3yrs_backtest.csv
+!wr_data/outputs/backtests/wr_binary_top40_within3yrs_recent_hits_backtest.csv
+!wr_data/outputs/backtests/wr_binary_600yd_first2yrs_backtest.csv
+!wr_data/outputs/feature_importance/wr_binary_top40_within3yrs_feature_importance.csv
+!wr_data/outputs/feature_importance/wr_binary_top40_within3yrs_recent_hits_feature_importance.csv
+!wr_data/outputs/feature_importance/wr_binary_600yd_first2yrs_feature_importance.csv
